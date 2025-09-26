@@ -8,8 +8,8 @@ export const connectDB = async () => {
   try {
     const client = new MongoClient(process.env.MONGO_URI);
     await client.connect();
-    db = client.db();
-    console.log("✅ Conectado a MongoDB");
+    db = client.db(process.env.MONGO_DB_NAME); // 👈 usar la DB del .env
+    console.log(`✅ Conectado a MongoDB en la base ${process.env.MONGO_DB_NAME}`);
   } catch (error) {
     console.error("❌ Error al conectar a MongoDB", error);
     process.exit(1);
