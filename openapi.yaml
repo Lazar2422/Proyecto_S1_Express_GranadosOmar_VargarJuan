@@ -1,0 +1,893 @@
+
+openapi: 3.0.3
+info:
+  title: KarenFlix API
+  version: "1.0.0"
+  description: |
+    API REST para registrar, calificar y rankear películas, animes y series geek.
+    Autenticación con JWT (Bearer), validaciones con express-validator, rate limiting,
+    transacciones reales en MongoDB y documentación Swagger.
+
+servers:
+  - url: http://localhost:4000
+    description: Servidor local (desarrollo)
+  - url: https://{host}
+    description: Servidor desplegado
+    variables:
+      host:
+        default: api.karenflix.example.com
+
+tags:
+  - name: Auth
+    description: Registro, login y perfil
+  - name: Categories
+    description: CRUD de categorías (admin)
+  - name: Titles
+    description: CRUD de títulos y listados
+  - name: Reviews
+    description: Reseñas y votos
+  - name: Admin
+    description: Acciones administrativas
+  - name: Meta
+    description: Salud y metadatos
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+      description: Página (1-indexed)
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      description: Tamaño de página
+    SortParam:
+      name: sort
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [ranking, recent, rating, popular]
+        default: ranking
+      description: Campo de ordenamiento
+    OrderParam:
+      name: order
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+      description: Dirección del ordenamiento
+    CategoryFilter:
+      name: category
+      in: query
+      required: false
+      schema: { type: string, description: "ObjectId de la categoría" }
+      description: Filtrar por categoría
+    KindFilter:
+      name: kind
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [movie, series, anime]
+      description: Tipo de título
+    SearchQ:
+      name: q
+      in: query
+      required: false
+      schema: { type: string }
+      description: Texto de búsqueda (título, sinopsis)
+
+  schemas:
+    Ok:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+    FieldError:
+      type: object
+      properties:
+        field: { type: string, example: "title" }
+        msg: { type: string, example: "Title is required" }
+    ErrorResponse:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        message: { type: string, example: "Validation error" }
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/FieldError" }
+
+    PageMeta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 20 }
+        total: { type: integer, example: 57 }
+        pages: { type: integer, example: 3 }
+
+    UserPublic:
+      type: object
+      properties:
+        id: { type: string, example: "6639c8dc9f7a2d5c2f4d1a00" }
+        email: { type: string, format: email }
+        displayName: { type: string, example: "Karen" }
+        role:
+          type: string
+          enum: [user, admin]
+        createdAt: { type: string, format: date-time }
+
+    AuthRegisterRequest:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+        displayName: { type: string }
+    AuthLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    AuthTokenResponse:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        tokenType: { type: string, example: "Bearer" }
+        accessToken: { type: string, example: "eyJhbGciOiJIUzI1NiIsInR5cCI..." }
+        expiresIn: { type: integer, example: 86400 }
+
+    Category:
+      type: object
+      properties:
+        id: { type: string, example: "6639c8dc9f7a2d5c2f4d1a10" }
+        name: { type: string, example: "Anime" }
+        slug: { type: string, example: "anime" }
+        description: { type: string, example: "Animación japonesa" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    TitleStats:
+      type: object
+      properties:
+        reviewsCount: { type: integer, example: 12 }
+        ratingSum: { type: number, format: float, example: 46.8 }
+        avgRating: { type: number, format: float, example: 3.9 }
+        votesUp: { type: integer, example: 20 }
+        votesDown: { type: integer, example: 5 }
+        wilsonScore: { type: number, format: float, example: 0.61 }
+        recencyBoost: { type: number, format: float, example: 0.35 }
+        rankingScore: { type: number, format: float, example: 0.72 }
+
+    Title:
+      type: object
+      properties:
+        id: { type: string, example: "6639c8dc9f7a2d5c2f4d1b00" }
+        kind:
+          type: string
+          enum: [movie, series, anime]
+        title: { type: string, example: "Cowboy Bebop" }
+        year: { type: integer, example: 1998 }
+        synopsis: { type: string, example: "Cazarrecompensas en el espacio." }
+        imageUrl: { type: string, nullable: true, example: "https://..." }
+        categoryId: { type: string, example: "6639c8dc9f7a2d5c2f4d1a10" }
+        submittedBy: { type: string, example: "6639c8dc9f7a2d5c2f4d1a00" }
+        approvedBy: { type: string, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        isApproved: { type: boolean, example: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        stats: { $ref: "#/components/schemas/TitleStats" }
+
+    Review:
+      type: object
+      properties:
+        id: { type: string, example: "6639c8dc9f7a2d5c2f4d1c00" }
+        titleId: { type: string, example: "6639c8dc9f7a2d5c2f4d1b00" }
+        userId: { type: string, example: "6639c8dc9f7a2d5c2f4d1a00" }
+        headline: { type: string, example: "Imperdible" }
+        comment: { type: string, example: "Soundtrack brutal y animación top." }
+        rating:
+          type: number
+          format: float
+          description: "Rango 1.0 - 5.0; incrementos de 0.1"
+          minimum: 1.0
+          maximum: 5.0
+          example: 4.6
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ReviewVoteRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: integer
+          enum: [-1, 1]
+          description: "-1 = dislike, 1 = like"
+
+    PaginatedTitles:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Title" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    PaginatedReviews:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Review" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+paths:
+  /api/v1/health:
+    get:
+      tags: [Meta]
+      summary: Estado del servicio
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  status: { type: string, example: "healthy" }
+                  version: { type: string, example: "1.0.0" }
+
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Registro de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuthRegisterRequest" }
+      responses:
+        "201":
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  user: { $ref: "#/components/schemas/UserPublic" }
+                  accessToken:
+                    type: string
+                    description: "Opcional: si el backend inicia sesión tras registrar"
+        "400":
+          description: Error de validación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Inicio de sesión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuthLoginRequest" }
+      responses:
+        "200":
+          description: Token emitido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthTokenResponse" }
+        "401":
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Perfil del usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Perfil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  user: { $ref: "#/components/schemas/UserPublic" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/categories:
+    get:
+      tags: [Categories]
+      summary: Listar categorías
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Lista de categorías
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Category" }
+                  meta: { $ref: "#/components/schemas/PageMeta" }
+    post:
+      tags: [Categories]
+      summary: Crear categoría (admin)
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  category: { $ref: "#/components/schemas/Category" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (requiere admin)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/categories/{id}:
+    get:
+      tags: [Categories]
+      summary: Obtener categoría por id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  category: { $ref: "#/components/schemas/Category" }
+        "404":
+          description: No encontrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    patch:
+      tags: [Categories]
+      summary: Actualizar categoría (admin)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                description: { type: string }
+      responses:
+        "200":
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  category: { $ref: "#/components/schemas/Category" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (requiere admin)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: No encontrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    delete:
+      tags: [Categories]
+      summary: Eliminar categoría (admin)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Eliminada
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (requiere admin)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: No encontrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/titles:
+    get:
+      tags: [Titles]
+      summary: Listar títulos
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/SortParam"
+        - $ref: "#/components/parameters/OrderParam"
+        - $ref: "#/components/parameters/CategoryFilter"
+        - $ref: "#/components/parameters/KindFilter"
+        - $ref: "#/components/parameters/SearchQ"
+      responses:
+        "200":
+          description: Lista de títulos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaginatedTitles" }
+    post:
+      tags: [Titles]
+      summary: Proponer/crear título (autenticado; aprobación pendiente de admin)
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, title, year, categoryId]
+              properties:
+                kind: { type: string, enum: [movie, series, anime] }
+                title: { type: string }
+                year: { type: integer, minimum: 1900, maximum: 2100 }
+                categoryId: { type: string }
+                synopsis: { type: string }
+                imageUrl: { type: string }
+      responses:
+        "201":
+          description: Creado (pendiente de aprobación)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  title: { $ref: "#/components/schemas/Title" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "400":
+          description: Error de validación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/titles/{id}:
+    get:
+      tags: [Titles]
+      summary: Obtener título por id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  title: { $ref: "#/components/schemas/Title" }
+        "404":
+          description: No encontrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    patch:
+      tags: [Titles]
+      summary: Actualizar título (admin/propietario, según política)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                synopsis: { type: string }
+                imageUrl: { type: string }
+                year: { type: integer, minimum: 1900, maximum: 2100 }
+                categoryId: { type: string }
+      responses:
+        "200":
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  title: { $ref: "#/components/schemas/Title" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: No encontrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/titles/{id}/approve:
+    patch:
+      tags: [Admin]
+      summary: Aprobar título (admin)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isApproved: { type: boolean, default: true }
+      responses:
+        "200":
+          description: Aprobado/actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  title: { $ref: "#/components/schemas/Title" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (requiere admin)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: No encontrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/titles/{id}/reviews:
+    get:
+      tags: [Reviews]
+      summary: Listar reseñas de un título
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaginatedReviews" }
+        "404":
+          description: Título no encontrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    post:
+      tags: [Reviews]
+      summary: Crear reseña para un título
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [headline, comment, rating]
+              properties:
+                headline: { type: string }
+                comment: { type: string }
+                rating:
+                  type: number
+                  minimum: 1.0
+                  maximum: 5.0
+                  example: 4.6
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  review: { $ref: "#/components/schemas/Review" }
+        "400":
+          description: Error de validación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Título no encontrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/reviews/{reviewId}:
+    patch:
+      tags: [Reviews]
+      summary: Editar reseña (autor)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                headline: { type: string }
+                comment: { type: string }
+                rating:
+                  type: number
+                  minimum: 1.0
+                  maximum: 5.0
+                  example: 4.4
+      responses:
+        "200":
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  review: { $ref: "#/components/schemas/Review" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (no autor)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: No encontrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    delete:
+      tags: [Reviews]
+      summary: Eliminar reseña (autor)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Eliminada
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (no autor)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: No encontrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/reviews/{reviewId}/vote:
+    post:
+      tags: [Reviews]
+      summary: Votar reseña (like/dislike)
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewVoteRequest" }
+      responses:
+        "200":
+          description: Voto registrado/actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+        "400":
+          description: Error de validación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (no se permite votar la propia reseña)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Reseña no encontrada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    delete:
+      tags: [Reviews]
+      summary: Eliminar voto de reseña
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Voto eliminado
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Reseña o voto no encontrado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/admin/rebuild-rankings:
+    post:
+      tags: [Admin]
+      summary: Recalcular ranking por lotes
+      description: Recalcula métricas y rankingScore para todos los títulos.
+      security: [ { bearerAuth: [] } ]
+      responses:
+        "202":
+          description: Tarea disparada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  processed: { type: integer, example: 243 }
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Prohibido (requiere admin)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
