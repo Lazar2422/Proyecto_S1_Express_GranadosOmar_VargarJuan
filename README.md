@@ -164,19 +164,147 @@ npm run build && npm start
 **1FN (Primera Forma Normal)**
 
 * Cada atributo es atómico (sin arrays de valores mixtos). Ej.: rating es `Number` con un solo valor por reseña.
-
+``` mermaid
+erDiagram
+    REVIEWS_1FN {
+      string _id PK
+      string userId "ObjectId"
+      string userEmail
+      string userDisplayName
+      string userRole "user|admin"
+      string titleId "ObjectId"
+      string title
+      number year
+      string kind "movie|series|anime"
+      string categoryId "ObjectId"
+      string categoryName
+      string categorySlug
+      string headline
+      string comment
+      number rating "1.0..5.0 step 0.1"
+      date createdAt
+      date updatedAt
+    }
+```
 **2FN (Segunda Forma Normal)**
 
 * Sin dependencias parciales en claves compuestas. Ej.: en `reviews`, la clave es `_id`; los campos dependen solo de `_id`. Los datos del usuario/categoría no viven aquí.
+``` mermaid
+erDiagram
+    USERS_2FN ||--o{ REVIEWS_2FN : "escribe"
+    TITLES_2FN ||--o{ REVIEWS_2FN : "recibe"
 
+    USERS_2FN {
+      string _id PK
+      string email "UNIQUE"
+      string displayName
+      string role "user|admin"
+      boolean isActive
+      date createdAt
+      date updatedAt
+    }
+
+    TITLES_2FN {
+      string _id PK
+      string title
+      number year
+      string kind "movie|series|anime"
+      string categoryId "ObjectId"
+      string categoryName  "⚠ transitiva"
+      string categorySlug  "⚠ transitiva"
+      string synopsis
+      string imageUrl
+      boolean isApproved
+      string submittedBy "ObjectId"
+      string approvedBy  "ObjectId"
+      date approvedAt
+      date createdAt
+      date updatedAt
+    }
+
+    REVIEWS_2FN {
+      string _id PK
+      string userId  "ObjectId"
+      string titleId "ObjectId"
+      string headline
+      string comment
+      number rating "1.0..5.0 step 0.1"
+      date createdAt
+      date updatedAt
+    }
+
+```
 **3FN (Tercera Forma Normal)**
 
 * Sin dependencias transitivas. Ej.: el `role` del usuario permanece en `users`, no en `reviews` ni en `titles`.
+``` mermaid
+erDiagram
+    USERS ||--o{ TITLES : "submittedBy / approvedBy"
+    USERS ||--o{ REVIEWS : "escribe"
+    USERS ||--o{ REVIEW_VOTES : "vota"
+    CATEGORIES ||--o{ TITLES : "clasifica"
+    TITLES ||--o{ REVIEWS : "recibe"
+    REVIEWS ||--o{ REVIEW_VOTES : "recibe votos"
 
-**BCNF (opcional)**
+    USERS {
+      string _id PK
+      string email
+      string passwordHash
+      string displayName
+      string role
+      boolean isActive
+      date createdAt
+      date updatedAt
+    }
 
-* Restricción adicional: todo determinante es clave. Evitamos que `title` determine `category` indirectamente: se usa `categoryId` explícito para romper cualquier dependencia ambigua.
+    CATEGORIES {
+      string _id PK
+      string name
+      string slug
+      string description
+      date createdAt
+      date updatedAt
+    }
 
+    TITLES {
+      string _id PK
+      string kind
+      string title
+      int year
+      string synopsis
+      string imageUrl
+      string normalizedTitle
+      string categoryId
+      string submittedBy
+      string approvedBy
+      boolean isApproved
+      date approvedAt
+      date createdAt
+      date updatedAt
+    }
+
+    REVIEWS {
+      string _id PK
+      string titleId
+      string userId
+      string headline
+      string comment
+      float rating
+      date createdAt
+      date updatedAt
+    }
+
+    REVIEW_VOTES {
+      string _id PK
+      string reviewId
+      string userId
+      int value
+      date createdAt
+      date updatedAt
+    }
+
+
+```
 **Proceso aplicado**
 
 1. Identificamos entidades (`User`, `Category`, `Title`, `Review`, `ReviewVote`).
@@ -201,11 +329,10 @@ npm run build && npm start
   "_id": "<ObjectId>",
   "email": "string",
   "passwordHash": "string",
-  "displayName": "string",
+  "Name": "string",
   "role": "user|admin",
   "createdAt": "<Date>",
-  "updatedAt": "<Date>",
-  "isActive": true
+  "updatedAt": "<Date>"
 }
 ```
 
