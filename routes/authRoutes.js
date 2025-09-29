@@ -1,50 +1,80 @@
-// routes/authRoutes.js
 import { Router } from "express";
-import { forgotPassword, resetPassword } from "../controllers/authController.js";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
-// Importa tu modelo real:
-import User from "../models/User.js"; // adapta la ruta
+import bcrypt from "bcrypt";
+import { getDB } from "../config/db.js";
+import { forgotPassword, resetPassword } from "../controllers/authController.js";
+
 const router = Router();
-
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
-const sign = (user) =>
-  jwt.sign({ sub: user._id.toString(), email: user.email }, JWT_SECRET, { expiresIn: "1h" });
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
 
+const sign = (user) =>
+  jwt.sign(
+    { sub: user._id.toString(), email: user.email, tv: user.tokenVersion || 0 },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
 // POST /api/v1/auth/register
 router.post("/register", async (req, res, next) => {
   try {
     const { name, email, password } = req.body || {};
-    if (!name || !email || !password) return res.status(400).json({ message: "Faltan campos" });
+    if (!name || !email || !password)
+      return res.status(400).json({ message: "Faltan campos" });
 
-    const exists = await User.findOne({ email });
+    const db = getDB();
+    const emailNorm = String(email).trim().toLowerCase();
+
+    const exists = await db.collection("users").findOne({ email: emailNorm });
     if (exists) return res.status(409).json({ message: "Email ya registrado" });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, password: passwordHash });
+    const doc = {
+      name,
+      email: emailNorm,
+      password: passwordHash,
+      role: "user",
+      createdAt: new Date(),
+      tokenVersion: 0,
+    };
 
-    return res.status(201).json({ message: "Usuario creado", user: { id: user._id, name, email } });
-  } catch (e) { next(e); }
+    const { insertedId } = await db.collection("users").insertOne(doc);
+
+    return res
+      .status(201)
+      .json({ message: "Usuario creado", user: { id: insertedId, name, email: emailNorm } });
+  } catch (e) {
+    next(e);
+  }
 });
 
 // POST /api/v1/auth/login
 router.post("/login", async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
-    const user = await User.findOne({ email });
+    const emailNorm = String(email || "").trim().toLowerCase();
+
+    const db = getDB();
+    const user = await db.collection("users").findOne({ email: emailNorm });
     if (!user) return res.status(401).json({ message: "Credenciales inválidas" });
 
-    const ok = await bcrypt.compare(password, user.password);
+    const ok = await bcrypt.compare(String(password || ""), String(user.password || ""));
     if (!ok) return res.status(401).json({ message: "Credenciales inválidas" });
 
     const token = sign(user);
     return res.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email }
+      user: {
+        id: user._id,
+        name: user.name ?? user.username ?? "",
+        email: user.email,
+        role: user.role ?? "user",
+      },
     });
   } catch (e) { next(e); }
 });
 
+// Forgot / Reset
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+
 export default router;

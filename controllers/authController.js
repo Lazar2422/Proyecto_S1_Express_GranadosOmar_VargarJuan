@@ -1,8 +1,48 @@
 import crypto from "crypto";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { getDB } from "../config/db.js";
 
-// ... forgotPassword que ya tienes ...
+const normEmail = (e) => String(e || "").trim().toLowerCase();
+
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    const FRONT_BASE_URL = process.env.FRONT_BASE_URL || "http://127.0.0.1:5500/html";
+    const RESET_TTL_MIN  = parseInt(process.env.RESET_TTL_MIN || "15", 10);
+    const isDev = process.env.NODE_ENV !== "production";
+
+    const db = getDB();
+    const user = await db.collection("users").findOne({ email: norm(email) });
+
+    if (user) {
+      const raw  = crypto.randomBytes(32).toString("hex");            // ← TOKEN CRUDO
+      const hash = crypto.createHash("sha256").update(raw).digest("hex");
+      const exp  = new Date(Date.now() + RESET_TTL_MIN * 60 * 1000);
+
+      await db.collection("users").updateOne(
+        { _id: user._id },
+        { $set: { resetPasswordTokenHash: hash, resetPasswordExpires: exp },
+          $unset: { resetPasswordToken: "" } }
+      );
+
+      const link = `${FRONT_BASE_URL}/reset.html?token=${raw}`;
+      console.log("[RESET LINK]", link); // útil igual
+
+      // 👇 DEVUELVE EL TOKEN EN DEV
+      return res.json({
+        message: "Si el correo existe, te enviamos instrucciones.",
+        ...(isDev ? { devToken: raw, link } : {})
+      });
+    }
+
+    // respuesta neutra si no existe el correo
+    return res.json({
+  message: "Si el correo existe, te enviamos instrucciones.",
+  devToken: raw,               // 👈 fuerza devolver token
+  link                          // 👈 y el link
+});
+  } catch (e) { next(e); }
+};
 
 export const resetPassword = async (req, res, next) => {
   try {

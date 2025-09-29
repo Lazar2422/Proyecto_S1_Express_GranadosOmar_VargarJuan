@@ -1,13 +1,12 @@
 import express from "express";
 import dotenv from "dotenv";
-import passport from "passport";
-import { errorHandler } from "./middlewares/errorHandler.js";
 import cors from "cors";
 
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import catalogoRoutes from "./routes/catalogoRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
+import { notFound, errorHandler } from "./middlewares/errorHandler.js";
 
 dotenv.config();
 const app = express();
@@ -19,8 +18,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-import "./config/passport.js";
-app.use(passport.initialize());
 
 // Rutas
 app.use("/api/v1/auth", authRoutes);
@@ -32,3 +29,6 @@ app.use("/api/v1/reviews", reviewRoutes);
 app.use(errorHandler);
 
 export default app;
+
+app.use(notFound);
+app.use(errorHandler);
