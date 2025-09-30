@@ -37,7 +37,40 @@ export const getById = async (req, res, next) => {
     next(err);
   }
 };
+// 🔹 Actualizar parcial (PATCH)
+export const patchItem = async (req, res, next) => {
+  try {
+    const db = getDB();
+    const { id } = req.params;
 
+    let oid;
+    try {
+      oid = new ObjectId(id);
+    } catch {
+      return res.status(400).json({ msg: "ID inválido" });
+    }
+
+    // permitimos solo ciertos campos
+    const patch = {};
+    if (req.body.title !== undefined) patch.title = String(req.body.title).trim();
+    if (req.body.year !== undefined) patch.year = String(req.body.year).trim();
+    if (req.body.category !== undefined) patch.category = String(req.body.category).trim();
+    if (req.body.status !== undefined) patch.status = req.body.status;
+
+    const result = await db.collection("catalogo").updateOne(
+      { _id: oid },
+      { $set: patch }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ msg: "Elemento no encontrado" });
+    }
+
+    res.json({ msg: "Elemento actualizado (PATCH)" });
+  } catch (err) {
+    next(err);
+  }
+};
 // 🔹 Crear nuevo item en catálogo
 export const createItem = async (req, res, next) => {
   try {

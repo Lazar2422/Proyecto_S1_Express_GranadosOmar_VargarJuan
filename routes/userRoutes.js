@@ -1,13 +1,21 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin } from "../middlewares/authMiddleware.js";
-import { getUsers } from "../controllers/userController.js";
+import { getUsers, getUserById, updateUser } from "../controllers/userController.js";
 import { getDB } from "../config/db.js";
 import { ObjectId } from "mongodb";
 
 const router = Router();
 
+// Listar todos (solo admin)
 router.get("/", requireAuth, requireAdmin, getUsers);
 
+// Obtener un usuario por id
+router.get("/:id", requireAuth, requireAdmin, getUserById);
+
+// Actualizar un usuario por id
+router.patch("/:id", requireAuth, requireAdmin, updateUser);
+
+// Obtener el usuario actual
 router.get("/me", requireAuth, async (req, res) => {
   const db = getDB();
   const me = await db.collection("users").findOne(

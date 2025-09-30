@@ -7,7 +7,8 @@ import {
   updateItem,
   deleteItem,
   searchByTitle,
-  getByGenre
+  getByGenre,
+  patchItem
 } from "../controllers/catalogoController.js";
 
 import { requireAuth, requireAdmin } from "../middlewares/authMiddleware.js";
@@ -45,6 +46,7 @@ router.get("/genre/:genre", getByGenre);        // filtro por género
 router.get("/:id", getById);                    // detalle por ID
 
 // Protegido (solo admin)
+router.patch("/:id", requireAuth, requireAdmin, patchItem);
 router.post("/", requireAuth, requireAdmin, createItem);
 router.put("/:id", requireAuth, requireAdmin, updateItem);
 router.delete("/:id", requireAuth, requireAdmin, deleteItem);
