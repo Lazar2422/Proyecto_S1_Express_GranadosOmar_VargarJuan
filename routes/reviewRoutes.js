@@ -1,37 +1,33 @@
 // routes/reviewRoutes.js
 import { Router } from "express";
 import {
-  listReviews,              // GET /reviews (admin)
-  createReview,             // POST /reviews (auth)
-  deleteReview,             // DELETE /reviews/:id (admin)
-  getReviewsByTitle,        // GET /reviews/by-title/:titleId (público, solo aprobadas)
-  updateMyReview,           // PATCH /reviews/:id (propietario o admin)
-  approveReview,            // PATCH /reviews/:id/approve (admin)
-  rejectReview              // PATCH /reviews/:id/reject (admin)
+  listReviews,
+  createReview,
+  deleteReview,
+  getReviewsByTitle,
+  updateMyReview,
+  getMyReviews
 } from "../controllers/reviewController.js";
-import { requireAuth, requireAdmin } from "../middlewares/authMiddleware.js";
-import { getMyReviews } from "../controllers/reviewController.js";
+import { requireAuth } from "../middlewares/authMiddleware.js";
 
 const router = Router();
 
-// ADMIN: listar todas (con ?status=approved|pending|rejected opcional)
-router.get("/", requireAuth, requireAdmin, listReviews);
-// USUARIO: obtener mis reseñas
-router.get("/me", requireAuth, getMyReviews);
-// PÚBLICO: reseñas por título (solo aprobadas)
-router.get("/by-title/:titleId", getReviewsByTitle);
+// ADMIN (o si quieres público): listar todas
+router.get("/", listReviews);
 
-// USUARIO: crear reseña (queda "pending")
+// PÚBLICO: reseñas por película
+router.get("/by-title/:movieId", getReviewsByTitle);
+
+// USUARIO: mis reseñas
+router.get("/me", requireAuth, getMyReviews);
+
+// USUARIO: crear
 router.post("/", requireAuth, createReview);
 
-// USUARIO (dueño) o ADMIN: editar texto/score
+// USUARIO: editar propia
 router.patch("/:id", requireAuth, updateMyReview);
 
-// ADMIN: aprobar / rechazar
-router.patch("/:id/approve", requireAuth, requireAdmin, approveReview);
-router.patch("/:id/reject",  requireAuth, requireAdmin, rejectReview);
-
-// ADMIN: eliminar
-router.delete("/:id", requireAuth, requireAdmin, deleteReview);
+// USUARIO: eliminar propia
+router.delete("/:id", requireAuth, deleteReview);
 
 export default router;
