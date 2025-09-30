@@ -6,8 +6,6 @@ export const ReviewModel = {
       title: String,
       comment: String,
       rating: Number,
-      likes: [],
-      dislikes: [],
       createdAt: Date,
     }
   };

@@ -135,3 +135,21 @@ export const deleteReview = async (req, res, next) => {
     res.status(204).end();
   } catch (e) { next(e); }
 };
+export const getMyReviews = async (req, res, next) => {
+  try {
+    const db = getDB();
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    const items = await db.collection("reviews")
+      .find({ userId: new ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({ items });
+  } catch (e) {
+    next(e);
+  }
+};

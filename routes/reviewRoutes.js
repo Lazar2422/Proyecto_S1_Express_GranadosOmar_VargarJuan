@@ -10,12 +10,14 @@ import {
   rejectReview              // PATCH /reviews/:id/reject (admin)
 } from "../controllers/reviewController.js";
 import { requireAuth, requireAdmin } from "../middlewares/authMiddleware.js";
+import { getMyReviews } from "../controllers/reviewController.js";
 
 const router = Router();
 
 // ADMIN: listar todas (con ?status=approved|pending|rejected opcional)
 router.get("/", requireAuth, requireAdmin, listReviews);
-
+// USUARIO: obtener mis reseñas
+router.get("/me", requireAuth, getMyReviews);
 // PÚBLICO: reseñas por título (solo aprobadas)
 router.get("/by-title/:titleId", getReviewsByTitle);
 

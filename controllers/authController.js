@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { getDB } from "../config/db.js";
+import { ObjectId } from "mongodb";
 
 const normEmail = (e) => String(e || "").trim().toLowerCase();
 
@@ -92,5 +93,67 @@ export const resetPassword = async (req, res, next) => {
     return res.json({ message: "Contraseña actualizada. Ya puedes iniciar sesión." });
   } catch (err) {
     next(err);
+  }
+};
+export const changePassword = async (req, res, next) => {
+  try {
+    const db = getDB();
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "No autorizado" });
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Faltan campos" });
+    }
+
+    // 👇 importante: convertir a ObjectId
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    const match = await bcrypt.compare(currentPassword, user.password);
+    if (!match) return res.status(400).json({ message: "Contraseña actual incorrecta" });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { password: hashed, updatedAt: new Date() } }
+    );
+
+    res.json({ message: "Contraseña actualizada correctamente" });
+  } catch (e) {
+    next(e);
+  }
+};
+export const updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id; // viene de requireAuth
+    const { newName, newEmail, password } = req.body;
+
+    if (!password) return res.status(400).json({ message: "Debes ingresar tu contraseña actual" });
+
+    const db = getDB();
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ message: "Contraseña incorrecta" });
+
+    const update = {};
+    if (newName) update.name = newName;
+    if (newEmail) update.email = newEmail;
+
+    if (!Object.keys(update).length) {
+      return res.status(400).json({ message: "No hay cambios que aplicar" });
+    }
+
+    update.updatedAt = new Date();
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: update }
+    );
+
+    res.json({ message: "Perfil actualizado", ...update });
+  } catch (e) {
+    next(e);
   }
 };

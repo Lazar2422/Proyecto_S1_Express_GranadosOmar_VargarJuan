@@ -7,6 +7,7 @@ import userRoutes from "./routes/userRoutes.js";
 import catalogoRoutes from "./routes/catalogoRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import { notFound, errorHandler } from "./middlewares/errorHandler.js";
+import genreRoutes from "./routes/genreRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -21,13 +22,14 @@ app.use(cors({
 
 app.use(express.json());
 
-// Rutas
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/catalogo", catalogoRoutes);
 app.use("/api/v1/reviews", reviewRoutes);
+app.use("/api/v1", genreRoutes);
 
-// Manejo de errores
+// Manejo de errores (siempre al final)
+app.use(notFound);
 app.use(errorHandler);
 
 export default app;
