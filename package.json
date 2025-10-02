@@ -24,7 +24,8 @@
     "nodemon": "^3.1.10",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.8.1"
   },
   "keywords": [],
   "description": ""

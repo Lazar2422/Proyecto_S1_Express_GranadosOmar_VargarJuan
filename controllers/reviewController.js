@@ -41,7 +41,7 @@ export const getReviewsByTitle = async (req, res, next) => {
 
 /* ==================== CREAR ==================== */
 export const createReview = async (req, res, next) => {
-  try {
+  try {pruebe
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: "No autorizado" });
 
@@ -54,6 +54,7 @@ export const createReview = async (req, res, next) => {
       movieId,
       userId,
       title: cleanText(title),
+      estado:cleanText(creada),
       comment: cleanText(comment),
       rating: clamp(rating, 1, 5),
       createdAt: new Date(),
